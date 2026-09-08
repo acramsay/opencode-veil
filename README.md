@@ -28,7 +28,7 @@ Add the package to opencode.json:
 ```json
 {
   "$schema": "https://opencode.ai/config.json",
-  "plugin": ["opencode-veil"]
+  "plugin": ["@acramsay/opencode-veil"]
 }
 ```
 
@@ -67,5 +67,12 @@ bun run test
 Tests run against the local gitleaks binary and skip with a hint when it is missing.
 `fixtures.json` contains synthetic secrets that gitleaks must match, so GitHub may raise
 secret-scanning alerts on this repo. Those are expected false positives.
+
+## Releases
+
+Trunk-based: work merges to `main` and semantic-release runs in CI on every push to `main`.
+Conventional commits drive the bumps (`feat` minor, `fix` patch, breaking changes major); each
+release publishes to npm, updates `package.json` and `CHANGELOG.md`, and creates a GitHub release.
+Never push a `v*` tag by hand, and never publish from a local machine.
 
 MIT license.
