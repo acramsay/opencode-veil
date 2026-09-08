@@ -1,0 +1,24 @@
+{
+  "name": "opencode-veil",
+  "version": "0.1.0",
+  "description": "opencode plugin that redacts secrets from prompts and tool outputs before they reach the LLM, via fully local gitleaks scanning",
+  "type": "module",
+  "license": "MIT",
+  "repository": "github:acramsay/opencode-veil",
+  "exports": {
+    "./server": "./src/plugin.ts"
+  },
+  "files": [
+    "src"
+  ],
+  "scripts": {
+    "test": "bun test ./test/test.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@opencode-ai/plugin": "1.18.29",
+    "@opencode-ai/sdk": "1.18.29",
+    "@types/bun": "1.4.1",
+    "typescript": "^5.9.2"
+  }
+}

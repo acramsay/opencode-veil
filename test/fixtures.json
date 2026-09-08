@@ -1,0 +1,47 @@
+[
+  {
+    "name": "github-pat",
+    "text": "tok = \"ghp_YW7qKmnZpjUMSS1TvW2QAABBlvLsAGkDxyD4\"",
+    "expect": ["github-pat"]
+  },
+  {
+    "name": "aws-access-token",
+    "text": "aws key AKIAPZJ5ZUDQZSZJWOKH",
+    "expect": ["aws-access-token"]
+  },
+  {
+    "name": "gitlab-pat",
+    "text": "glpat-abcDEF0123456789_-xyz",
+    "expect": ["gitlab-pat"]
+  },
+  {
+    "name": "private-key",
+    "text": "-----BEGIN RSA PRIVATE KEY-----\nMIIEowIBAAKCAQEA7zV8d2HkAWsGxQy8Y7l6fJfN1VH2G0PLbLz0aplesSRGuCUM\n-----END RSA PRIVATE KEY-----",
+    "expect": ["private-key"]
+  },
+  {
+    "name": "aws-external-id-hint",
+    "text": "grant glpat-abcDEF0123456789_-xyz limited reading, but never trust an AWS access token AKIAPZJ5ZUDQZSZJWOKH",
+    "expect": ["gitlab-pat", "aws-access-token"]
+  },
+  {
+    "name": "uuid",
+    "text": "correlation id 9a3b2f1c-4d5e-6f7a-8b9c-0d1e2f3a4b5c",
+    "expect": []
+  },
+  {
+    "name": "base64-padding",
+    "text": "SGVsbG8sIHdvcmxkLi4uIHNvbWUgdGVzdCBtZXNzYWdl",
+    "expect": []
+  },
+  {
+    "name": "jwt-redacted-not-hard-negative",
+    "text": "bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U",
+    "expect": ["jwt"]
+  },
+  {
+    "name": "plain-prose",
+    "text": "Rewrite the auth layer so refresh tokens rotate on use; mirror the shape of the existing handler and return clear errors.",
+    "expect": []
+  }
+]
