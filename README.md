@@ -2,13 +2,19 @@
 
 [opencode](https://opencode.ai) plugin that redacts secrets before they reach the upstream LLM.
 On each turn the `experimental.chat.messages.transform` hook hands plugins the full outgoing
-message array. veil scans each user text part and each completed tool output once, memoized by
-part ID per server process, and splices matches out as `[REDACTED:<rule-id>]`.
+message array. veil scans each user text part (including the synthetic parts opencode injects
+for `@`-mention file references) and each completed tool output once, memoized by part ID per
+server process, and splices matches out as `[REDACTED:<rule-id>]`.
 
 Tool outputs are the primary leak vector. `cat .env`, `gh auth token`, PEM files; much of what
 the model sees arrives through completed tool parts, not typing. Tool inputs, error outputs, and
 anything still pending or running stay untouched. Those states carry no output text to scrub yet,
 and inputs are yours.
+
+`@`-mentioning a file is an equally direct vector: opencode resolves the reference by injecting
+the file's contents into the user message as synthetic text parts and sends them to the model.
+Those parts are scanned like typed text. Only `ignored` parts (which never reach the model) are
+skipped.
 
 Assistant text parts are never scanned. They are the model's own prior output.
 
@@ -49,6 +55,8 @@ never logged, only rule IDs.
 
 - The transform mutates only the outgoing copy of a message. The stored session keeps the raw
   text, and part ID memoization means each span is scanned at most once per server process.
+- `@`-mention file injection is scanned, but the stored session still keeps the raw file text;
+  redaction applies to the outgoing prompt only.
 - Tool inputs, and tool outputs in `error`, `pending`, or `running` states, pass through
   unscrubbed.
 - gitleaks' default ruleset deliberately allowlists example keys (`AKIA...EXAMPLE`) and

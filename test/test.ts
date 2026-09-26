@@ -18,7 +18,7 @@ const binaryOk = await checkBinary(BINARY)
 
 describe("veil gitleaks pipeline", () => {
   describe("target collection", () => {
-    test("collects user text + completed tool outputs, skips the rest", () => {
+    test("collects user text (incl. synthetic mention parts) + completed tool outputs, skips the rest", () => {
       const token = "ghp_YW7qKmnZpjUMSS1TvW2QAABBlvLsAGkDxyD4"
       const toolPart = {
         id: "tool-1",
@@ -31,12 +31,17 @@ describe("veil gitleaks pipeline", () => {
         state: { status: "running" as const, output: token },
       }
       const textPart = { id: "u1", type: "text", text: `prefix ${token}` }
+      // Synthetic text is how opencode injects @-mention file contents into the
+      // user message; those parts are sent to the model, so they must scan.
+      const syntheticPart = { id: "u2", type: "text", text: token, synthetic: true }
+      const ignoredPart = { id: "u3", type: "text", text: token, ignored: true }
       const messages = [
         {
           info: { id: "msg-u", role: "user" },
           parts: [
             textPart,
-            { id: "u2", type: "text", text: token, synthetic: true },
+            syntheticPart,
+            ignoredPart,
             { id: "f1", type: "file", text: token },
           ],
         },
@@ -52,11 +57,12 @@ describe("veil gitleaks pipeline", () => {
       // Cast: minimal SDK stand-ins; collectTargets only reads the fields.
       ] as unknown as Parameters<typeof collectTargets>[0]
       const targets = collectTargets(messages)
-      expect(targets.map((t) => t.partID).sort()).toEqual(["tool-1", "u1"])
+      expect(targets.map((t) => t.partID).sort()).toEqual(["tool-1", "u1", "u2"])
       for (const t of targets) {
         t.set("[REDACTED]")
       }
       expect(textPart.text).toBe("[REDACTED]")
+      expect(syntheticPart.text).toBe("[REDACTED]")
       expect(toolPart.state.output).toBe("[REDACTED]")
     })
   })

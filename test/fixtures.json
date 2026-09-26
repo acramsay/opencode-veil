@@ -15,6 +15,11 @@
     "expect": ["gitlab-pat"]
   },
   {
+    "name": "wireguard-private-key",
+    "text": "[Interface]\nPrivateKey = l7MV0jxU++0N1JxZ+8ljpli4KeeInXCeu5MekiKyMGU=\nAddress = 10.2.0.2/32",
+    "expect": ["generic-api-key"]
+  },
+  {
     "name": "private-key",
     "text": "-----BEGIN RSA PRIVATE KEY-----\nMIIEowIBAAKCAQEA7zV8d2HkAWsGxQy8Y7l6fJfN1VH2G0PLbLz0aplesSRGuCUM\n-----END RSA PRIVATE KEY-----",
     "expect": ["private-key"]

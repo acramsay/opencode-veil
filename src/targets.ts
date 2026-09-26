@@ -11,11 +11,15 @@ export type ScanTarget = {
 // Picks the scannable spans out of a transform message array: user text parts
 // and completed tool outputs. Completed-only; error/running states carry no
 // output text yet, and inputs stay untouched by design.
+// Synthetic user text parts ARE included: opencode injects @-mention file
+// contents as synthetic parts and sends them to the model, so they are a
+// first-class leak vector (real-world miss: a pasted WireGuard config). Only
+// ignored parts (never sent) are skipped.
 export function collectTargets(messages: Array<{ info: Message; parts: Part[] }>): ScanTarget[] {
   const out: ScanTarget[] = []
   for (const m of messages) {
     for (const p of m.parts) {
-      if (m.info.role === "user" && p.type === "text" && !p.synthetic && !p.ignored) {
+      if (m.info.role === "user" && p.type === "text" && !p.ignored) {
         out.push({ partID: p.id, messageID: m.info.id, kind: "text", get: () => p.text, set: (v) => { p.text = v } })
       } else if (m.info.role === "assistant" && p.type === "tool" && p.state.status === "completed") {
         const state = p.state
