@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.1](https://github.com/acramsay/opencode-veil/compare/v1.0.0...v1.0.1) (2026-09-26)
+
+
+### Bug Fixes
+
+* user prompts are now scanned too, accounting for [@file](https://github.com/file) mentions ([ff07784](https://github.com/acramsay/opencode-veil/commit/ff07784f13c3b3d14c70effde08d9fce89bd6500))
+
 # 1.0.0 (2026-09-08)
 
 
