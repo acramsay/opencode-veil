@@ -1,10 +1,9 @@
 import { homedir } from "node:os"
 import { join } from "node:path"
 
-export const veilHome = join(
-  process.env.XDG_CACHE_HOME ?? join(homedir(), ".cache"),
-  "veil",
-)
+export function veilHome(): string {
+  return join(process.env.XDG_CACHE_HOME ?? join(homedir(), ".cache"), "veil")
+}
 
 export type AuditEvent = {
   ts: number

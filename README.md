@@ -1,10 +1,11 @@
 # opencode-veil
 
 [opencode](https://opencode.ai) plugin that redacts secrets before they reach the upstream LLM.
-On each turn the `experimental.chat.messages.transform` hook hands plugins the full outgoing
-message array. veil scans each user text part (including the synthetic parts opencode injects
-for `@`-mention file references) and each completed tool output once, memoized by part ID per
-server process, and splices matches out as `[REDACTED:<rule-id>]`.
+On each turn opencode hands the plugin the full outgoing message array —
+`experimental.chat.messages.transform` on v1, `ctx.session.hook("context", …)` on v2. veil
+scans each user text part (including the synthetic parts opencode injects for `@`-mention file
+references) and each completed tool output, and splices matches out as `[REDACTED:<rule-id>]`.
+v1 and v2 are served from one package entrypoint; the redaction core is shared.
 
 Tool outputs are the primary leak vector. `cat .env`, `gh auth token`, PEM files; much of what
 the model sees arrives through completed tool parts, not typing. Tool inputs, error outputs, and
@@ -29,7 +30,7 @@ the binary is missing, the plugin disables itself and logs a warning to opencode
 Requires [gitleaks](https://github.com/gitleaks/gitleaks) on PATH (`brew install gitleaks` on
 macOS).
 
-Add the package to opencode.json:
+Add the package to opencode.json. On v1 the key is `plugin`:
 
 ```json
 {
@@ -38,7 +39,17 @@ Add the package to opencode.json:
 }
 ```
 
-opencode installs the package with Bun at startup.
+On v2 it is `plugins`:
+
+```jsonc
+{
+  "$schema": "https://opencode.ai/config.json",
+  "plugins": ["@acramsay/opencode-veil"]
+}
+```
+
+opencode installs the package with Bun at startup. On v2 the plugin registers the `context`,
+`compaction`, `generate`, and `title` session hooks, so every model request kind is covered.
 
 ## Audit
 
@@ -53,11 +64,16 @@ never logged, only rule IDs.
 
 ## Known behavior
 
-- The transform mutates only the outgoing copy of a message. The stored session keeps the raw
-  text, and part ID memoization means each span is scanned at most once per server process.
+- Redaction mutates only the outgoing request. The stored session — and on v2, persisted
+  history — keeps the raw text. This plugin does not rewrite history.
+- Scan results are cached by content hash and re-applied on every model call, so a repeated
+  span costs a hash lookup rather than another gitleaks run.
+- On v2, assistant text, reasoning, system parts, media/file parts, and tool inputs pass
+  through unscrubbed. Tool inputs are model-authored and redacting them would corrupt
+  legitimate writes, so they stay untouched by design (matching v1).
 - `@`-mention file injection is scanned, but the stored session still keeps the raw file text;
   redaction applies to the outgoing prompt only.
-- Tool inputs, and tool outputs in `error`, `pending`, or `running` states, pass through
+- v1: tool inputs, and tool outputs in `error`, `pending`, or `running` states, pass through
   unscrubbed.
 - gitleaks' default ruleset deliberately allowlists example keys (`AKIA...EXAMPLE`) and
   entropy-filters low-variance strings. `fixtures.json` records shapes that reliably do and don't
@@ -69,12 +85,28 @@ never logged, only rule IDs.
 ```
 bun install
 bun run typecheck
-bun run test
+bun run test              # unit: scanner, target collection, gitleaks fixtures
+bun run test:integration  # spawns opencode2 against a local provider stub
 ```
 
-Tests run against the local gitleaks binary and skip with a hint when it is missing.
-`fixtures.json` contains synthetic secrets that gitleaks must match, so GitHub may raise
-secret-scanning alerts on this repo. Those are expected false positives.
+Unit tests are co-located in `src/*.test.ts`. The gitleaks suite runs against the local binary and
+skips with a hint when it is missing; the scanner and collector suites use injected fakes and need
+nothing external. `fixtures.json` contains synthetic secrets that gitleaks must match, so GitHub
+may raise secret-scanning alerts on this repo. Those are expected false positives.
+
+Integration tests (`test/integration.test.ts`) spawn a real `opencode2 run --standalone` in a
+throwaway project. A local OpenAI-compatible stub stands in for the provider, so there is no
+provider key and no network: the test asserts the captured outbound request body contains the
+redaction and never the raw secret. It is local/opt-in — CI runs unit tests only — and skips with
+a hint when `opencode2` is not on PATH. Set `VEIL_TEST_OPENCODE` to use a different binary.
+
+## Future work
+
+- **Media/file content** is not scanned. v2 `media` content parts and `file` entries inside
+  `tool-result` content can carry secrets (data URIs, referenced files). They pass through
+  unscrubbed today.
+- **Assistant text and reasoning** are trusted as model output and not scanned. They can only
+  carry a secret that leaked through some other vector.
 
 ## Releases
 

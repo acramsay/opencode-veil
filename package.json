@@ -9,21 +9,32 @@
     "url": "git+https://github.com/acramsay/opencode-veil.git"
   },
   "exports": {
+    ".": "./src/plugin.ts",
     "./server": "./src/plugin.ts"
   },
   "files": [
-    "src"
+    "src/audit.ts",
+    "src/gitleaks.ts",
+    "src/plugin.ts",
+    "src/scan.ts",
+    "src/targets-v1.ts",
+    "src/targets-v2.ts",
+    "src/v1.ts",
+    "src/v2.ts"
   ],
   "publishConfig": {
     "access": "public"
   },
   "scripts": {
-    "test": "bun test ./test/test.ts",
+    "test": "bun test src/",
+    "test:integration": "bun test test/",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
     "@opencode-ai/plugin": "^1.18.29",
     "@opencode-ai/sdk": "^1.18.29",
+    "@opencode/ai": "^2.0.18",
+    "@opencode/plugin": "^2.0.18",
     "@semantic-release/changelog": "^7.0.0",
     "@semantic-release/commit-analyzer": "^13.0.1",
     "@semantic-release/git": "^11.0.1",
