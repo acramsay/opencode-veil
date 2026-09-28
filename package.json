@@ -1,6 +1,6 @@
 {
   "name": "@acramsay/opencode-veil",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "description": "opencode plugin that redacts secrets from prompts and tool outputs before they reach the LLM, via fully local gitleaks scanning",
   "type": "module",
   "license": "MIT",
