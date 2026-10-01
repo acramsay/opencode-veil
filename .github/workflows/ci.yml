@@ -30,6 +30,7 @@ jobs:
       contents: write
       issues: write
       pull-requests: write
+      id-token: write # OIDC for npm trusted publishing
     steps:
       - uses: actions/checkout@v4
         with:
@@ -39,10 +40,6 @@ jobs:
         with:
           node-version: 24
       - run: bun install --frozen-lockfile
-      # NPM_TOKEN: the first publish of a new package name needs a classic
-      # automation token (or a granular token not scoped to the package);
-      # rotate to a package-scoped granular token afterward.
       - run: npx semantic-release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
