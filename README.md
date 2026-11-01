@@ -51,6 +51,13 @@ On v2 it is `plugins`:
 opencode installs the package with Bun at startup. On v2 the plugin registers the `context`,
 `compaction`, `generate`, and `title` session hooks, so every model request kind is covered.
 
+## Local development
+
+`opencode.json` at the repo root loads the plugin from source through `./src/dev` and disables the
+published package with `-veil`, so only this checkout runs. v2 resolves local plugin entries as
+directories, which is why `./src/dev` works and a bare `@acramsay/opencode-veil@file:.` spec fails
+with `Plugin entrypoint not found`. Run opencode from this directory to pick it up.
+
 ## Audit
 
 Every scan appends one JSON line to `~/.cache/veil/audit.jsonl`:
