@@ -1,11 +1,10 @@
 # opencode-veil
 
 [opencode](https://opencode.ai) plugin that redacts secrets before they reach the upstream LLM.
-On each turn opencode hands the plugin the full outgoing message array —
-`experimental.chat.messages.transform` on v1, `ctx.session.hook("context", …)` on v2. veil
-scans each user text part (including the synthetic parts opencode injects for `@`-mention file
-references) and each completed tool output, and splices matches out as `[REDACTED:<rule-id>]`.
-v1 and v2 are served from one package entrypoint; the redaction core is shared.
+On each turn opencode hands the plugin the full outgoing message array through
+`ctx.session.hook("context", …)`. veil scans each user text part (including the synthetic parts
+opencode injects for `@`-mention file references) and each completed tool output, and splices
+matches out as `[REDACTED:<rule-id>]`.
 
 Tool outputs are the primary leak vector. `cat .env`, `gh auth token`, PEM files; much of what
 the model sees arrives through completed tool parts, not typing. Tool inputs, error outputs, and
@@ -28,18 +27,10 @@ the binary is missing, the plugin disables itself and logs a warning to opencode
 ## Install
 
 Requires [gitleaks](https://github.com/gitleaks/gitleaks) on PATH (`brew install gitleaks` on
-macOS).
+macOS). The sidebar shows whether gitleaks is available as a health dot and the current session's
+redaction count; see [Sidebar indicator](#sidebar-indicator).
 
-Add the package to opencode.json. On v1 the key is `plugin`:
-
-```json
-{
-  "$schema": "https://opencode.ai/config.json",
-  "plugin": ["@acramsay/opencode-veil"]
-}
-```
-
-On v2 it is `plugins`:
+Add the package to opencode.json:
 
 ```jsonc
 {
@@ -48,7 +39,7 @@ On v2 it is `plugins`:
 }
 ```
 
-opencode installs the package with Bun at startup. On v2 the plugin registers the `context`,
+opencode installs the package with Bun at startup. The plugin registers the `context`,
 `compaction`, `generate`, and `title` session hooks, so every model request kind is covered.
 
 ## Local development
@@ -58,30 +49,41 @@ published package with `-veil`, so only this checkout runs. v2 resolves local pl
 directories, which is why `./src/dev` works and a bare `@acramsay/opencode-veil@file:.` spec fails
 with `Plugin entrypoint not found`. Run opencode from this directory to pick it up.
 
-## Audit
+## Redaction log
 
-Every scan appends one JSON line to `~/.cache/veil/audit.jsonl`:
+Every redaction inserts one row into a local SQLite database at `~/.cache/veil/veil.db`, table
+`veil_events`. A row records the timestamp, the root session id and the exact session id, the
+message and part ids, the span kind (`text` or `tool`), the number of secrets redacted, and the
+rule ids. The secret value is never stored, only which rules matched.
 
-```json
-{"ts":1788298584251,"outcome":"redact","kind":"tool","messageID":"msg_...","partID":"prt_...","scanMs":27,"rules":["github-pat"]}
+Only spans gitleaks actually redacted are persisted. Clean spans and fail-open errors go to the
+opencode log instead. Rows are scoped to the root session, so a subagent's redactions roll up to
+the session you're looking at, and are deleted when their session is deleted.
+
+## Sidebar indicator
+
+The TUI sidebar shows one line, for example:
+
+```
+Veil ●            3 🔍
 ```
 
-`outcome` is `redact`, `clean`, or `fail-open`. `kind` is `text` or `tool`. The secret itself is
-never logged, only rule IDs.
+The dot is green when gitleaks is on PATH and red when it is missing or the plugin is unreachable.
+The number beside `🔍` is how many secrets veil has redacted in the current session, read from the
+redaction log so it survives a server restart. The line always renders, showing a red dot and `0`
+before the first response.
 
 ## Known behavior
 
-- Redaction mutates only the outgoing request. The stored session — and on v2, persisted
-  history — keeps the raw text. This plugin does not rewrite history.
+- Redaction mutates only the outgoing request. The stored session and persisted history keep
+  the raw text. This plugin does not rewrite history.
 - Scan results are cached by content hash and re-applied on every model call, so a repeated
   span costs a hash lookup rather than another gitleaks run.
-- On v2, assistant text, reasoning, system parts, media/file parts, and tool inputs pass
-  through unscrubbed. Tool inputs are model-authored and redacting them would corrupt
-  legitimate writes, so they stay untouched by design (matching v1).
+- Assistant text, reasoning, system parts, media/file parts, and tool inputs pass through
+  unscrubbed. Tool inputs are model-authored and redacting them would corrupt legitimate
+  writes, so they stay untouched by design.
 - `@`-mention file injection is scanned, but the stored session still keeps the raw file text;
   redaction applies to the outgoing prompt only.
-- v1: tool inputs, and tool outputs in `error`, `pending`, or `running` states, pass through
-  unscrubbed.
 - gitleaks' default ruleset deliberately allowlists example keys (`AKIA...EXAMPLE`) and
   entropy-filters low-variance strings. `fixtures.json` records shapes that reliably do and don't
   match.
@@ -94,7 +96,12 @@ bun install
 bun run typecheck
 bun run test              # unit: scanner, target collection, gitleaks fixtures
 bun run test:integration  # spawns opencode2 against a local provider stub
+bun run build:tui         # precompile the TUI entry from src/tui.tsx
 ```
+
+The published TUI entry is a precompiled copy of `src/tui.tsx`, a workaround for opencode not
+running the Solid JSX transform on TSX from `node_modules`. Run `bun run build:tui` after editing
+`src/tui.tsx`; `prepublishOnly` regenerates it on release.
 
 Unit tests are co-located in `src/*.test.ts`. The gitleaks suite runs against the local binary and
 skips with a hint when it is missing; the scanner and collector suites use injected fakes and need

@@ -1,6 +1,7 @@
+import type { Database } from "bun:sqlite"
 import { createHash } from "node:crypto"
-import { appendAudit } from "./audit"
 import { redactText, scanText, type Finding } from "./gitleaks"
+import { recordRedaction, type RedactionEvent } from "./store"
 
 export type Logger = (
   level: "info" | "warn" | "error",
@@ -11,6 +12,7 @@ export type Logger = (
 export type ScanTarget = {
   partID: string
   messageID: string
+  sessionID: string
   kind: "text" | "tool"
   get: () => string
   set: (v: string) => void
@@ -22,20 +24,54 @@ export type ScanTarget = {
 // call, so a secret reappears and must be re-redacted every time. Caching the
 // *result* rather than skipping the span keeps that correct while still paying
 // the gitleaks cost once per unique span.
-// Fail-open: any scan error logs and passes the text through untouched.
+// Fail-open: any scan or store error logs and passes the text through untouched.
 export function createScanner(opts: {
   log: Logger
-  auditPath: string
+  db: Database
+  getParentID: (sessionID: string) => Promise<string | null>
   // Injectable for tests; production uses the real gitleaks pipeline.
   scan?: (text: string) => Promise<Finding[]>
   redact?: (text: string, findings: Finding[]) => string
+  onRedact?: (event: RedactionEvent) => void
 }) {
-  const { log, auditPath, scan = scanText, redact = redactText } = opts
+  const { log, db, getParentID, scan = scanText, redact = redactText, onRedact } = opts
   const cache = new Map<string, string>()
+  const roots = new Map<string, string>()
+
+  // Walks parentID to the top, memoizing every session on the path so each
+  // distinct session costs at most one lookup. Failure attributes the span to
+  // the scanning session rather than throwing.
+  async function resolveRoot(sessionID: string): Promise<string> {
+    const cached = roots.get(sessionID)
+    if (cached !== undefined) return cached
+    const path: string[] = []
+    let id = sessionID
+    try {
+      for (;;) {
+        const known = roots.get(id)
+        if (known !== undefined) {
+          id = known
+          break
+        }
+        path.push(id)
+        const parent = await getParentID(id)
+        if (!parent) break
+        id = parent
+      }
+      for (const visited of path) roots.set(visited, id)
+      return id
+    } catch (err) {
+      const reason = err instanceof Error ? err.message : String(err)
+      await log("warn", "root session lookup failed; attributing redaction to the scanning session", {
+        sessionID,
+        error: reason,
+      })
+      roots.set(sessionID, sessionID)
+      return sessionID
+    }
+  }
 
   async function scanOne(target: ScanTarget): Promise<void> {
-    const started = Date.now()
-    const base = { kind: target.kind, messageID: target.messageID, partID: target.partID }
     try {
       const text = target.get()
       const key = createHash("sha256").update(text).digest("hex")
@@ -45,10 +81,8 @@ export function createScanner(opts: {
         return
       }
       const findings = await scan(text)
-      const scanMs = Date.now() - started
       if (findings.length === 0) {
         cache.set(key, text)
-        await appendAudit(auditPath, { ts: Date.now(), ...base, outcome: "clean", scanMs })
         return
       }
       const redacted = redact(text, findings)
@@ -60,7 +94,27 @@ export function createScanner(opts: {
         partID: target.partID,
         rules,
       })
-      await appendAudit(auditPath, { ts: Date.now(), ...base, outcome: "redact", scanMs, rules })
+      try {
+        const rootID = await resolveRoot(target.sessionID)
+        const event: RedactionEvent = {
+          rootID,
+          sessionID: target.sessionID,
+          messageID: target.messageID,
+          partID: target.partID,
+          kind: target.kind,
+          secrets: findings.length,
+          rules,
+        }
+        recordRedaction(db, event)
+        onRedact?.(event)
+      } catch (err) {
+        const reason = err instanceof Error ? err.message : String(err)
+        await log("error", "redaction store write failed; continuing (fail-open)", {
+          kind: target.kind,
+          partID: target.partID,
+          error: reason,
+        })
+      }
     } catch (err) {
       const reason = err instanceof Error ? err.message : String(err)
       await log("error", "prompt scan failed; passing through (fail-open)", {
@@ -68,7 +122,6 @@ export function createScanner(opts: {
         partID: target.partID,
         error: reason,
       })
-      await appendAudit(auditPath, { ts: Date.now(), ...base, outcome: "fail-open", error: reason })
     }
   }
 

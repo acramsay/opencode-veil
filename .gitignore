@@ -1,6 +1,7 @@
 node_modules/
 package-lock.json
 dist/
+src/tui.compiled.tsx
 *.log
 .env
 .DS_Store

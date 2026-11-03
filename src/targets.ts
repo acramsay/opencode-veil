@@ -10,10 +10,10 @@ type ToolResultPart = { type: "tool-result"; result: ToolResult }
 type Part = TextPart | ToolResultPart | { type: string }
 
 // Picks scannable spans out of a v2 model request: user text parts and tool
-// results. Mirrors the v1 collector — user-authored text and tool output are the
-// leak vectors; assistant text, reasoning, system, media, and tool inputs stay
-// untouched. Redaction mutates the outgoing request only, never persisted history.
-export function collectTargetsV2(messages: Array<Message>): ScanTarget[] {
+// results. User-authored text and tool output are the leak vectors; assistant
+// text, reasoning, system, media, and tool inputs stay untouched. Redaction
+// mutates the outgoing request only, never persisted history.
+export function collectTargets(messages: Array<Message>, sessionID: string): ScanTarget[] {
   const out: ScanTarget[] = []
   messages.forEach((message, mi) => {
     const messageID = message.id ?? `message-${mi}`
@@ -22,9 +22,9 @@ export function collectTargetsV2(messages: Array<Message>): ScanTarget[] {
       const partID = `${messageID}:${pi}`
       if (message.role === "user" && part.type === "text") {
         const text = part as TextPart
-        push(out, { partID, messageID, kind: "text", get: () => text.text, set: (v) => { text.text = v } })
+        push(out, { partID, messageID, sessionID, kind: "text", get: () => text.text, set: (v) => { text.text = v } })
       } else if (part.type === "tool-result") {
-        collectResult(out, partID, messageID, (part as ToolResultPart).result)
+        collectResult(out, partID, messageID, sessionID, (part as ToolResultPart).result)
       }
     })
   })
@@ -35,6 +35,7 @@ function collectResult(
   out: ScanTarget[],
   partID: string,
   messageID: string,
+  sessionID: string,
   result: ToolResult,
 ): void {
   if (result.type === "content") {
@@ -44,6 +45,7 @@ function collectResult(
       push(out, {
         partID: `${partID}:${ei}`,
         messageID,
+        sessionID,
         kind: "tool",
         get: () => entry.text as string,
         set: (v) => { entry.text = v },
@@ -56,6 +58,7 @@ function collectResult(
     push(out, {
       partID: `${partID}:0`,
       messageID,
+      sessionID,
       kind: "tool",
       get: () => result.value as string,
       set: (v) => { result.value = v },
@@ -64,7 +67,7 @@ function collectResult(
   }
   let leaf = 0
   walkStrings(result.value, (get, set) =>
-    push(out, { partID: `${partID}:${leaf++}`, messageID, kind: "tool", get, set }),
+    push(out, { partID: `${partID}:${leaf++}`, messageID, sessionID, kind: "tool", get, set }),
   )
 }
 
