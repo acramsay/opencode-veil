@@ -1,5 +1,12 @@
 # Changelog
 
+# [1.2.0](https://github.com/acramsay/opencode-veil/compare/v1.1.0...v1.2.0) (2026-11-03)
+
+
+### Features
+
+* Remove opencode v1 support. Add tui plugin and redaction counter ([af56d7b](https://github.com/acramsay/opencode-veil/commit/af56d7b4ef665c5106164d65696ade981766e736))
+
 # [1.1.0](https://github.com/acramsay/opencode-veil/compare/v1.0.1...v1.1.0) (2026-09-28)
 
 
